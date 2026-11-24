@@ -1,3 +1,5 @@
+<img src="logo.svg" alt="veil" width="128">
+
 # veil
 
 veil covers your Mac's screens and locks it the moment anyone touches it, so you can leave it unlocked for an agent to keep working. The agent's background work in your browser keeps going under the cover; when its task ends, the Mac locks.
