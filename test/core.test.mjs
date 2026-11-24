@@ -152,3 +152,17 @@ test("R10 display ids decode from the buffer's base64", () => {
   assert.deepEqual([...u32s(Buffer.from(Uint32Array.from([1, 261, 0, 4294967295]).buffer).toString("base64"))], [1, 261, 0, 4294967295]);
   assert.deepEqual([...u32s("AgAAAA==")], [2]);
 });
+
+test("the cover's mark creeps: near center, never fast, never still for long", () => {
+  const { drift } = core();
+  let prev = drift(0), anchor = prev, since = 0, still = 0, fastest = 0;
+  for (let t = K.TICK; t < 2 * 3600; t += K.TICK) {
+    const d = drift(t);
+    assert.ok(Math.abs(d.x) <= K.DRIFT && Math.abs(d.y) <= K.DRIFT, `${d.x}, ${d.y} pt from center at ${t} s`);
+    fastest = Math.max(fastest, Math.hypot(d.x - prev.x, d.y - prev.y) / K.TICK);
+    if (Math.hypot(d.x - anchor.x, d.y - anchor.y) > 1) { anchor = d; since = t; }
+    still = Math.max(still, t - since); prev = d;
+  }
+  assert.ok(fastest < 1, `moves ${fastest} pt/s`);
+  assert.ok(still < 30, `sits within 1 pt of one spot for ${still} s`);
+});

@@ -17,6 +17,7 @@ const K = {
   LOCK_WAIT: 3,       // seconds a lock has to take before the cover drops
   MAX_GRACE: 5,       // seconds past the time limit before the warden steps in
   INPUT_EPS: 0.05,    // an idle counter drop smaller than this is noise
+  DRIFT: 40,          // points the cover's mark wanders from center, each way
 };
 // Under 1, so WindowServer doesn't count pages under it as covered (they'd
 // stop painting and refuse trusted clicks); 0.001 of a pixel rounds to black.
@@ -62,6 +63,14 @@ function holderStep(s, r) {
   }
   if (s.phase === "arming" && r.idle >= K.ARM_IDLE) s.phase = "armed";
   return { s, act };
+}
+
+// Where the cover's mark sits t seconds in, in points from center: it creeps
+// along very slow sine waves (15 and 11 minutes) plus a 2-minute circle, under
+// a point a second, so it never sits still (OLED burn-in) and never jumps.
+function drift(t) {
+  const w = 2 * Math.PI, c = K.DRIFT / 5;
+  return { x: 4 * c * Math.sin(w * t / 900) + c * Math.cos(w * t / 120), y: 3 * c * Math.sin(w * t / 660) + c * Math.sin(w * t / 120) };
 }
 
 // Physical displays nothing covers: not a loft, and not a mirror of a covered one.
@@ -162,6 +171,49 @@ function run(argv) {
     const first = wins[Object.keys(wins)[0]];
     if (first) first.w.makeKeyAndOrderFront($());
   }
+  // A grey lock and "This Mac is in use", centered: enough to say the Mac isn't
+  // stuck, nothing about who or what is running. Drawn inside the cover, so the
+  // cover check doesn't change; if drawing fails the cover stays plain black.
+  // Both are drawn once into a single picture, so they move as one: live text
+  // snaps to whole pixels on its own while the lock glides between them.
+  // Returns the picture's view and its centered origin, for drift(), or null.
+  function mark(w, width, height) {
+    try {
+      const grey = $.NSColor.colorWithWhiteAlpha(0.45, 1);
+      const sym = $.NSImage.imageWithSystemSymbolNameAccessibilityDescription("lock.fill", $());
+      const iv = $.NSImageView.imageViewWithImage(sym.imageWithSymbolConfiguration($.NSImageSymbolConfiguration.configurationWithPointSizeWeight(36, 0)));
+      iv.contentTintColor = grey;
+      const label = $.NSTextField.labelWithString("This Mac is in use");
+      label.font = $.NSFont.systemFontOfSize(15); label.textColor = grey; label.sizeToFit;
+      const i = iv.fittingSize, t = label.frame.size, gap = 12;
+      const bw = Math.ceil(Math.max(i.width, t.width)), bh = Math.ceil(i.height + gap + t.height);
+      const draft = $.NSView.alloc.initWithFrame($.NSMakeRect(0, 0, bw, bh));
+      iv.frame = $.NSMakeRect(Math.round((bw - i.width) / 2), Math.round(t.height + gap), i.width, i.height);
+      label.frame = $.NSMakeRect(Math.round((bw - t.width) / 2), 0, t.width, t.height);
+      draft.addSubview(iv); draft.addSubview(label);
+      // In the window while it's drawn, so the picture has the screen's pixel density.
+      w.contentView.addSubview(draft);
+      const rep = draft.bitmapImageRepForCachingDisplayInRect(draft.bounds);
+      draft.cacheDisplayInRectToBitmapImageRep(draft.bounds, rep);
+      draft.removeFromSuperview;
+      const pic = $.NSImage.alloc.initWithSize($.NSMakeSize(bw, bh));
+      pic.addRepresentation(rep);
+      const box = $.NSImageView.imageViewWithImage(pic);
+      box.frame = $.NSMakeRect(0, 0, bw, bh);
+      // Its own layer, which the compositor places at any fraction of a pixel.
+      box.wantsLayer = true;
+      const x = Math.round((width - bw) / 2), y = Math.round((height - bh) / 2);
+      box.setFrameOrigin($.NSMakePoint(x, y));
+      w.contentView.addSubview(box);
+      return { box, x, y };
+    } catch (e) { return null; }
+  }
+  // Moves every mark to where drift() says it is t seconds in, between pixels
+  // too, so it glides rather than stepping a pixel at a time.
+  function wander(t) {
+    const d = drift(t);
+    for (const id of Object.keys(wins)) { const m = wins[id].mark; if (m) m.box.setFrameOrigin($.NSMakePoint(m.x + d.x, m.y + d.y)); }
+  }
   function cover() {
     const main = $.CGDisplayBounds($.CGMainDisplayID());
     for (const d of screens()) {
@@ -174,8 +226,9 @@ function run(argv) {
       w.hasShadow = false; w.hidesOnDeactivate = false; w.releasedWhenClosed = false;
       // Every Space (1), stationary (16), out of the window cycle (64), beside full-screen apps (256).
       w.collectionBehavior = 1 | 16 | 64 | 256;
+      const m = mark(w, b.size.width, b.size.height);
       w.setFrameDisplay(rect, true); w.orderFrontRegardless;
-      wins[d.id] = { w, num: Number(w.windowNumber), b: { x: b.origin.x, y: b.origin.y, w: b.size.width, h: b.size.height } };
+      wins[d.id] = { w, mark: m, num: Number(w.windowNumber), b: { x: b.origin.x, y: b.origin.y, w: b.size.width, h: b.size.height } };
     }
   }
   // Why the cover falls short, or "": each window on screen at its level,
@@ -202,8 +255,10 @@ function run(argv) {
   if (!ok) { const why = coverFault(); close(); say({ ok: false, code: "cover_failed", error: `veil couldn't cover every display (${why}); nothing was locked` }); $.exit(1); }
   say({ ok: true, pid: $.getpid(), covered: Object.keys(wins).map(Number) });
   let s = holderInit({ max: Number(argv[3]), dry }), n = 0, r = null, warden = 0;
+  const t0 = now();
   for (;;) {
     spin(K.TICK);
+    wander(now() - t0);
     // Input every tick, since it's the cheapest read and the first touch matters
     // most; the rest every third tick (every tick while a lock is pending), and
     // the cover every fifth.

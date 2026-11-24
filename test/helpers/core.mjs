@@ -6,5 +6,5 @@ export const SOURCE = readFileSync(new URL("../../veil.js", import.meta.url), "u
 export function core() {
   const ctx = vm.createContext({});
   vm.runInContext(SOURCE, ctx);
-  return vm.runInContext("({ holderStep, wardenStep, holderInit, wardenInit, uncovered, u32s, K })", ctx);
+  return vm.runInContext("({ holderStep, wardenStep, holderInit, wardenInit, uncovered, u32s, drift, K })", ctx);
 }
