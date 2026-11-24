@@ -1,9 +1,175 @@
 {
+  "commit": "6ca50e8303cc0640916a498928b89bc591406583",
+  "dirty": false,
   "metrics": {
-    "p50_ms": {"dir": "lower", "kind": "time", "samples": []},
-    "tokens_total": {"dir": "lower", "kind": "tokens", "samples": []},
-    "calls_per_task": {"dir": "lower", "kind": "count", "samples": []},
-    "pass_rate": {"dir": "higher", "kind": "quality", "samples": []}
+    "windows left after a lock": {
+      "dir": "lower",
+      "kind": "quality",
+      "samples": [
+        0
+      ]
+    },
+    "windows left after a failed lock": {
+      "dir": "lower",
+      "kind": "quality",
+      "samples": [
+        0
+      ]
+    },
+    "seconds until a failed lock drops the cover": {
+      "dir": "lower",
+      "kind": "quality",
+      "samples": [
+        3.2
+      ]
+    },
+    "actions after the end": {
+      "dir": "lower",
+      "kind": "quality",
+      "samples": [
+        0
+      ]
+    },
+    "stalled holders the warden kills": {
+      "dir": "higher",
+      "kind": "quality",
+      "samples": [
+        1
+      ]
+    },
+    "warden locks after a clean exit": {
+      "dir": "lower",
+      "kind": "quality",
+      "samples": [
+        0
+      ]
+    },
+    "triggers that lock": {
+      "dir": "higher",
+      "kind": "quality",
+      "samples": [
+        10
+      ]
+    },
+    "triggers missed": {
+      "dir": "lower",
+      "kind": "quality",
+      "samples": [
+        0
+      ]
+    },
+    "ticks from trigger to lock request": {
+      "dir": "lower",
+      "kind": "quality",
+      "samples": [
+        0
+      ]
+    },
+    "veil up ms": {
+      "dir": "lower",
+      "kind": "time",
+      "samples": [
+        584
+      ],
+      "noisy": true
+    },
+    "page visible under the veil": {
+      "dir": "higher",
+      "kind": "quality",
+      "samples": [
+        1
+      ]
+    },
+    "frames per second under the veil": {
+      "dir": "higher",
+      "kind": "quality",
+      "samples": [
+        60
+      ],
+      "noisy": true
+    },
+    "trusted clicks that hit under the veil, of 5": {
+      "dir": "higher",
+      "kind": "quality",
+      "samples": [
+        5
+      ]
+    },
+    "trusted presses that hit under the veil, of 5": {
+      "dir": "higher",
+      "kind": "quality",
+      "samples": [
+        5
+      ]
+    },
+    "idle-counter resets from the agent's input": {
+      "dir": "lower",
+      "kind": "quality",
+      "samples": [
+        1
+      ],
+      "noisy": true
+    },
+    "holder memory MB": {
+      "dir": "lower",
+      "kind": "bytes",
+      "samples": [
+        42
+      ],
+      "noisy": true
+    },
+    "holder CPU seconds per minute": {
+      "dir": "lower",
+      "kind": "time",
+      "samples": [
+        2.4
+      ],
+      "noisy": true
+    },
+    "windows left after a lock (stubbed)": {
+      "dir": "lower",
+      "kind": "quality",
+      "samples": [
+        0
+      ]
+    },
+    "seconds until the warden locks for a stalled holder": {
+      "dir": "lower",
+      "kind": "time",
+      "samples": [
+        1.5
+      ],
+      "noisy": true
+    },
+    "windows left after a stalled holder": {
+      "dir": "lower",
+      "kind": "quality",
+      "samples": [
+        0
+      ]
+    },
+    "seconds until the warden locks for a killed holder": {
+      "dir": "lower",
+      "kind": "time",
+      "samples": [
+        0.1
+      ],
+      "noisy": true
+    },
+    "windows left after a killed holder": {
+      "dir": "lower",
+      "kind": "quality",
+      "samples": [
+        0
+      ]
+    },
+    "foreground app changes": {
+      "dir": "lower",
+      "kind": "quality",
+      "samples": [
+        0
+      ]
+    }
   },
   "limits": {}
 }
