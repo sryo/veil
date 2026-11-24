@@ -1,0 +1,10 @@
+{
+  "name": "veil",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Covers your Mac's screens and locks it on the first touch, so an agent can keep working while you're away.",
+  "bin": { "veil": "veil.mjs" },
+  "scripts": { "test": "node --test --test-concurrency=1 test/" },
+  "engines": { "node": ">=22.16" }
+}
