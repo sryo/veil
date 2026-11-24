@@ -9,8 +9,7 @@
 // below (tested under node:vm); the glue that reads the Mac is inside run().
 
 const K = {
-  TICK: 0.1,          // seconds between the holder's readings
-  WARDEN_TICK: 0.25,  // seconds between the warden's
+  TICK: 0.1,          // seconds between readings
   ARM_IDLE: 2,        // seconds of no input before input counts as a touch
   PARTNER_WAIT: 5,    // seconds the holder waits for its warden and its cover
   BEAT_STALE: 1.5,    // seconds without a holder heartbeat before the warden acts
@@ -127,11 +126,14 @@ function run(argv) {
     const holder = Number(argv[2]);
     write(path("warden.json"), JSON.stringify({ pid: $.getpid() }));
     say({ ok: true, pid: $.getpid() });
-    let s = wardenInit({ max: Number(argv[3]) });
+    let s = wardenInit({ max: Number(argv[3]) }), n = 0, beat = now();
     for (;;) {
-      const beat = Number(read(path("beat")) || 0);
-      const ex = read(path("exit.json"));
-      const r = { t: now(), holderAlive: alive(holder), beatAge: beat ? now() - beat : 0, exitReason: ex ? JSON.parse(ex).why : null, locked: locked() };
+      // Whether the holder lives, every tick; its beat and the lock every third,
+      // and its exit note as soon as it's gone.
+      const holderAlive = alive(holder), slow = n++ % 3 === 0 || !holderAlive || s.phase === "locking";
+      if (slow) beat = Number(read(path("beat")) || beat);
+      const ex = holderAlive ? "" : read(path("exit.json"));
+      const r = { t: now(), holderAlive, beatAge: now() - beat, exitReason: ex ? JSON.parse(ex).why : null, locked: slow ? locked() : false };
       const o = wardenStep(s, r); s = o.s;
       for (const a of o.act) {
         if (a.kind === "kill") { log({ ev: "kill", pid: holder }); $.kill(holder, 9); }
@@ -139,7 +141,7 @@ function run(argv) {
         else if (a.kind === "pmset") pmset();
         else if (a.kind === "exit") { log({ ev: "exit", why: a.why }); $.exit(0); }
       }
-      delay(K.WARDEN_TICK);
+      delay(K.TICK);
     }
   }
 
@@ -187,7 +189,7 @@ function run(argv) {
   for (let i = 0; i < 20 && !ok; i++) { spin(K.TICK); ok = coverOk(); }
   if (!ok) { const why = coverFault(); close(); say({ ok: false, code: "cover_failed", error: `veil couldn't cover every display (${why}); nothing was locked` }); $.exit(1); }
   say({ ok: true, pid: $.getpid(), covered: Object.keys(wins).map(Number) });
-  let s = holderInit({ max: Number(argv[3]), dry }), n = 0, r = null;
+  let s = holderInit({ max: Number(argv[3]), dry }), n = 0, r = null, warden = 0;
   for (;;) {
     spin(K.TICK);
     // Input every tick, since it's the cheapest read and the first touch matters
@@ -196,11 +198,11 @@ function run(argv) {
     if (n % 5 === 0) ok = coverOk();
     if (n++ % 3 === 0 || !r || s.phase === "locking") {
       write(path("beat"), String(now()));
-      const wj = read(path("warden.json"));
-      r = { displays: screens(), covered: Object.keys(wins).map(Number), ownerAlive: !owner || alive(owner),
-        wardenAlive: wj ? alive(JSON.parse(wj).pid) : null, down: exists(path("down")), locked: locked() };
+      if (!warden) { const wj = read(path("warden.json")); warden = wj ? JSON.parse(wj).pid : 0; }
+      r = { displays: screens(), covered: Object.keys(wins).map(Number), locked: locked() };
     }
-    r = Object.assign({}, r, { t: now(), idle: idle(), coverOk: ok });
+    // The cheap triggers every tick: input, `veil down`, and both processes.
+    r = Object.assign({}, r, { t: now(), idle: idle(), coverOk: ok, down: exists(path("down")), ownerAlive: !owner || alive(owner), wardenAlive: warden ? alive(warden) : null });
     const o = holderStep(s, r); s = o.s;
     for (const a of o.act) {
       if (a.kind === "lock") lock(a.why);
