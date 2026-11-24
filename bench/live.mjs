@@ -18,7 +18,7 @@ const PERCH = process.env.PERCH_DIR || join(process.env.HOME, "Documents", "perc
 const { connect, text } = await import(join(PERCH, "scripts", "mcp-client.mjs"));
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const osa = (src) => execFileSync("osascript", ["-l", "JavaScript", "-e", src], { encoding: "utf8" }).trim();
-const probe = () => JSON.parse(osa(`ObjC.import("AppKit"); ObjC.import("CoreGraphics"); const p=$.CGEventGetLocation($.CGEventCreate(null)); JSON.stringify({ front: ObjC.unwrap($.NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier), cursor: [Math.round(p.x), Math.round(p.y)], idle: Math.min(...[1, 3, 25, 5, 6, 7, 27, 10, 12, 22, 23, 24].map((t) => Number($.CGEventSourceSecondsSinceLastEventType(1, t)))) })`));
+const probe = () => JSON.parse(osa(`ObjC.import("AppKit"); ObjC.import("CoreGraphics"); const p=$.CGEventGetLocation($.CGEventCreate(null)); const f=$.NSWorkspace.sharedWorkspace.frontmostApplication; JSON.stringify({ front: ObjC.unwrap(f.bundleIdentifier), frontPid: Number(f.processIdentifier), cursor: [Math.round(p.x), Math.round(p.y)], idle: Math.min(...[1, 3, 25, 5, 6, 7, 27, 10, 12, 22, 23, 24].map((t) => Number($.CGEventSourceSecondsSinceLastEventType(1, t)))) })`));
 const windowsOf = (pid) => Number(osa(`ObjC.import("CoreGraphics"); (ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(0, 0))) || []).filter((w) => w.kCGWindowOwnerPID === ${pid}).length`));
 const lofts = () => JSON.parse(execFileSync("loft", ["list", "--json"], { encoding: "utf8" }));
 function veil(home, env, ...args) {
@@ -103,16 +103,27 @@ try {
     put(`windows left after a ${name} holder`, "lower", "quality", (alive(u.pid) ? windowsOf(u.pid) : 0) + (alive(u.warden) ? 1 : 0));
   }
 
+  const fg1 = probe();
+  put("foreground app changes", "lower", "quality", fg0.front === fg1.front ? 0 : 1);
+
+  // With the user away (fium away, or no real input for 5 minutes): one real
+  // veil over every screen. It holds the keyboard, perch's press still lands,
+  // and `veil down` locks the Mac with nothing of veil's left on screen.
   if (process.argv.includes("--real")) {
-    const away = spawnSync("fium", ["away"]);
-    if (away.status !== 0) console.error("live: --real skipped, the user is here (fium away)");
+    const away = spawnSync("fium", ["away"]).status === 0 || probe().idle >= 300;
+    if (!away) console.error("live: --real skipped, the user is here");
     else {
       const h = mkdtempSync(join(tmpdir(), "veil-bench-")); homes.push(h);
       const u = veil(h, {}, "up", "--max", "5");
+      if (!u.ok) throw new Error(`real veil up: ${JSON.stringify(u)}`);
       await sleep(1500);
+      put("keys go to the real veil", "higher", "quality", probe().frontPid === u.pid ? 1 : 0);
+      const pr = J(await c.call("press", { target, selector: "#i", key: "a", trusted: true }));
+      put("trusted presses that hit under the real veil, of 1", "higher", "quality", pr.hit === true ? 1 : 0);
       const d = veil(h, {}, "down");
-      await sleep(1500);
+      await until(() => !alive(u.pid), 4000);
       put("veil windows left on the real lock screen", "lower", "quality", (alive(u.pid) ? windowsOf(u.pid) : 0) + (d.why === "locked" ? 0 : 1));
+      put("Mac locked by veil down", "higher", "quality", osa(`ObjC.import("Foundation"); ObjC.bindFunction("IORegistryGetRootEntry", ["unsigned int", ["unsigned int"]]); ObjC.bindFunction("IORegistryEntryCreateCFProperty", ["id", ["unsigned int", "id", "void *", "unsigned int"]]); String((ObjC.deepUnwrap($.IORegistryEntryCreateCFProperty($.IORegistryGetRootEntry(0), $("IOConsoleUsers"), $(), 0)) || []).some((x) => x && x.CGSSessionScreenIsLocked === true))`) === "true" ? 1 : 0);
     }
   }
 } catch (e) { console.error(`live: ${e.stack || e}`); process.exitCode = 1; }
@@ -120,8 +131,6 @@ finally {
   if (tabId) try { await c.call("close_tab", { tabId }); } catch {}
   for (const h of homes) try { const r = JSON.parse(readFileSync(join(h, "veil.json"), "utf8")); for (const p of [r.pid, r.warden, r.caffeinate]) try { process.kill(p, "SIGKILL"); } catch {} } catch {}
   c.close(); srv.close();
-  const fg1 = probe();
-  put("foreground app changes", "lower", "quality", fg0.front === fg1.front ? 0 : 1);
   if (!process.exitCode) save("live", metrics);
   process.exit(process.exitCode || 0);
 }

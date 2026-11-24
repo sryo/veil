@@ -38,3 +38,10 @@ test("R11 input means a real key, click, move or scroll, not the any-event count
   assert.doesNotMatch(body, /4294967295/);
   for (const t of [1, 3, 5, 6, 7, 10, 12, 22, 25, 27]) assert.match(body, new RegExp(`\\b${t}\\b`), `event type ${t}`);
 });
+
+test("R12 a real veil takes the keyboard, so the first key lands on the cover", () => {
+  assert.match(SOURCE, /canBecomeKeyWindow/);
+  assert.match(SOURCE, /activateIgnoringOtherApps\(true\)/);
+  // A dry run (a bench while the user may be here) takes it only when asked.
+  assert.match(SOURCE, /const takeKeys = !dry \|\| env\.VEIL_TAKE_KEYS === "1"/);
+});

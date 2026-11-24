@@ -150,14 +150,25 @@ function run(argv) {
   $.NSApplication.sharedApplication.setActivationPolicy(1);
   const level = Number($.CGShieldingWindowLevel()) + 1;
   const wins = {};
+  // A real veil takes the keyboard: veil comes to the front and a cover is the
+  // key window, so the first key lands on it rather than the user's app, and
+  // locks. A dry run takes it only when asked, since the user may be here.
+  const takeKeys = !dry || env.VEIL_TAKE_KEYS === "1";
+  ObjC.registerSubclass({ name: "VeilPanel", superclass: "NSPanel", methods: { canBecomeKeyWindow: { types: ["bool", []], implementation: () => takeKeys } } });
+  function keys() {
+    if (!takeKeys || $.NSApp.isActive) return;
+    $.NSApp.activateIgnoringOtherApps(true);
+    const first = wins[Object.keys(wins)[0]];
+    if (first) first.w.makeKeyAndOrderFront($());
+  }
   function cover() {
     const main = $.CGDisplayBounds($.CGMainDisplayID());
     for (const d of screens()) {
       if (d.loft || d.mirrorOf || wins[d.id]) continue;
       const b = $.CGDisplayBounds(d.id);
       const rect = $.NSMakeRect(b.origin.x, main.size.height - (b.origin.y + b.size.height), b.size.width, b.size.height);
-      // Borderless (0), non-activating (1 << 7): a click on it never brings veil forward.
-      const w = $.NSPanel.alloc.initWithContentRectStyleMaskBackingDefer(rect, 1 << 7, 2, false);
+      // Borderless (0); non-activating (1 << 7) unless veil takes the keyboard.
+      const w = $.VeilPanel.alloc.initWithContentRectStyleMaskBackingDefer(rect, takeKeys ? 0 : 1 << 7, 2, false);
       w.level = level; w.backgroundColor = $.NSColor.blackColor; w.opaque = false; w.alphaValue = ALPHA;
       w.hasShadow = false; w.hidesOnDeactivate = false; w.releasedWhenClosed = false;
       // Every Space (1), stationary (16), out of the window cycle (64), beside full-screen apps (256).
@@ -198,6 +209,7 @@ function run(argv) {
     if (n % 5 === 0) ok = coverOk();
     if (n++ % 3 === 0 || !r || s.phase === "locking") {
       write(path("beat"), String(now()));
+      keys();
       if (!warden) { const wj = read(path("warden.json")); warden = wj ? JSON.parse(wj).pid : 0; }
       r = { displays: screens(), covered: Object.keys(wins).map(Number), locked: locked() };
     }
