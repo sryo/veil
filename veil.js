@@ -9,7 +9,8 @@
 // below (tested under node:vm); the glue that reads the Mac is inside run().
 
 const K = {
-  TICK: 0.1,          // seconds between readings
+  TICK: 0.1,          // seconds between the holder's readings
+  WARDEN_TICK: 0.25,  // seconds between the warden's
   ARM_IDLE: 2,        // seconds of no input before input counts as a touch
   PARTNER_WAIT: 5,    // seconds the holder waits for its warden and its cover
   BEAT_STALE: 1.5,    // seconds without a holder heartbeat before the warden acts
@@ -101,6 +102,9 @@ function run(argv) {
   ObjC.import("stdlib");
   ObjC.bindFunction("kill", ["int", ["int", "int"]]);
   ObjC.bindFunction("getpid", ["int", []]);
+  ObjC.bindFunction("CGGetActiveDisplayList", ["int", ["unsigned int", "void *", "void *"]]);
+  ObjC.bindFunction("IORegistryGetRootEntry", ["unsigned int", ["unsigned int"]]);
+  ObjC.bindFunction("IORegistryEntryCreateCFProperty", ["id", ["unsigned int", "id", "void *", "unsigned int"]]);
   const env = ObjC.deepUnwrap($.NSProcessInfo.processInfo.environment);
   const mode = argv[0];
   if (mode === "selftest") return JSON.stringify({ ok: true, lockBinds: bindLock(), displays: displays(), idle: idle(), locked: sessionLocked() });
@@ -135,7 +139,7 @@ function run(argv) {
         else if (a.kind === "pmset") pmset();
         else if (a.kind === "exit") { log({ ev: "exit", why: a.why }); $.exit(0); }
       }
-      delay(K.TICK);
+      delay(K.WARDEN_TICK);
     }
   }
 
@@ -163,11 +167,11 @@ function run(argv) {
   // Why the cover falls short, or "": each window on screen at its level,
   // opaque enough, and spanning its display.
   function coverFault() {
-    const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(1, 0))) || [];
     const ids = Object.keys(wins);
     if (!ids.length) return "no display to cover";
     for (const id of ids) {
-      const c = wins[id], e = list.find((x) => x.kCGWindowNumber === c.num), live = $.CGDisplayBounds(Number(id)), b = e && e.kCGWindowBounds;
+      // Only this window (kCGWindowListOptionIncludingWindow), if it's on screen.
+      const c = wins[id], e = (ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(8, c.num))) || []).find((x) => x.kCGWindowNumber === c.num && x.kCGWindowIsOnscreen), live = $.CGDisplayBounds(Number(id)), b = e && e.kCGWindowBounds;
       if (!e) return `display ${id}: its cover isn't on screen`;
       if (e.kCGWindowLayer !== level || e.kCGWindowAlpha < ALPHA - 0.0005) return `display ${id}: its cover is at level ${e.kCGWindowLayer}, alpha ${e.kCGWindowAlpha}`;
       if (b.X > live.origin.x || b.Y > live.origin.y || b.X + b.Width < live.origin.x + live.size.width || b.Y + b.Height < live.origin.y + live.size.height) return `display ${id}: its cover doesn't span it`;
@@ -183,14 +187,19 @@ function run(argv) {
   for (let i = 0; i < 20 && !ok; i++) { spin(K.TICK); ok = coverOk(); }
   if (!ok) { const why = coverFault(); close(); say({ ok: false, code: "cover_failed", error: `veil couldn't cover every display (${why}); nothing was locked` }); $.exit(1); }
   say({ ok: true, pid: $.getpid(), covered: Object.keys(wins).map(Number) });
-  let s = holderInit({ max: Number(argv[3]), dry }), n = 0;
+  let s = holderInit({ max: Number(argv[3]), dry }), n = 0, r = null;
   for (;;) {
     spin(K.TICK);
-    write(path("beat"), String(now()));
-    if (n++ % 5 === 0) ok = coverOk();
-    const wj = read(path("warden.json"));
-    const r = { t: now(), idle: idle(), displays: screens(), covered: Object.keys(wins).map(Number), coverOk: ok,
-      ownerAlive: !owner || alive(owner), wardenAlive: wj ? alive(JSON.parse(wj).pid) : null, down: exists(path("down")), locked: locked() };
+    // Input every tick, since it's the cheapest read and the first touch matters
+    // most; the rest every third tick, and the cover every fifth.
+    if (n % 5 === 0) ok = coverOk();
+    if (n++ % 3 === 0 || !r) {
+      write(path("beat"), String(now()));
+      const wj = read(path("warden.json"));
+      r = { displays: screens(), covered: Object.keys(wins).map(Number), ownerAlive: !owner || alive(owner),
+        wardenAlive: wj ? alive(JSON.parse(wj).pid) : null, down: exists(path("down")), locked: locked() };
+    }
+    r = Object.assign({}, r, { t: now(), idle: idle(), coverOk: ok });
     const o = holderStep(s, r); s = o.s;
     for (const a of o.act) {
       if (a.kind === "lock") lock(a.why);
@@ -234,7 +243,6 @@ function idle() { return Math.min.apply(null, INPUT_TYPES.map((t) => Number($.CG
 // Every active display; a loft is vendor 0x6c66, product 0x7466. The ids
 // come back through a byte buffer, read as base64 (a Ref holds only one).
 function displays() {
-  ObjC.bindFunction("CGGetActiveDisplayList", ["int", ["unsigned int", "void *", "void *"]]);
   const buf = $.NSMutableData.dataWithLength(4 * 32), cnt = $.NSMutableData.dataWithLength(4);
   if ($.CGGetActiveDisplayList(32, buf.mutableBytes, cnt.mutableBytes) !== 0) return [];
   const n = u32s(ObjC.unwrap(cnt.base64EncodedStringWithOptions(0)))[0];
@@ -257,8 +265,6 @@ function u32s(b64) {
 // IOConsoleUsers gains CGSSessionScreenIsLocked once the screen is locked.
 function sessionLocked() {
   try {
-    ObjC.bindFunction("IORegistryGetRootEntry", ["unsigned int", ["unsigned int"]]);
-    ObjC.bindFunction("IORegistryEntryCreateCFProperty", ["id", ["unsigned int", "id", "void *", "unsigned int"]]);
     const users = ObjC.deepUnwrap($.IORegistryEntryCreateCFProperty($.IORegistryGetRootEntry(0), $("IOConsoleUsers"), $(), 0)) || [];
     return users.some((u) => !!u && u.CGSSessionScreenIsLocked === true);
   } catch (e) { return false; }
