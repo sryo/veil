@@ -15,6 +15,7 @@ bench/live.mjs    # live, on a loft with the lock stubbed; --real locks once whi
 
 ## How it works
 - `veil up` spawns `veil.js holder` detached; it covers each physical display with a borderless non-activating NSPanel at `CGShieldingWindowLevel()+1`, alpha 0.999, checks the cover in CGWindowList and answers one JSON line. Then `veil.js warden` (holding the holder's pid) and `caffeinate -d -i -w <holder>`. The record is `$VEIL_HOME/veil.json` (default `~/Library/Application Support/veil`); `up.lock` (a directory) keeps ups one at a time.
+- A real veil activates itself and keeps a cover as the key window (a `VeilPanel` that can become key), taking it back whenever another app comes forward, so a key lands on veil and locks.
 - The holder ticks every 100ms (`spin`, so AppKit sees display changes and the cover absorbs clicks): HID idle (`CGEventSourceSecondsSinceLastEventType`, no permission), active displays (lofts, vendor `0x6c66`, skipped), the cover every fifth tick, the owner pid, the warden's pid, `$VEIL_HOME/down`, and whether the session is locked (IOConsoleUsers). It writes `beat` each tick. `holderStep` decides: arm after 2s idle; then a drop in the idle counter, or anytime the owner gone, `down`, a new display, the cover lost, the warden gone or the time limit, requests the lock.
 - The lock is `SACLockScreenImmediate` (private login.framework, bound after `dlopen`, no permission), `pmset displaysleepnow` 1s later if it hasn't taken. Locked: the cover closes and both exit. Not locked within 3s: the cover closes anyway and the holder exits `lock_failed`. Nothing re-raises.
 - The warden (`wardenStep`) locks when the holder dies or its beat is 1.5s stale (killing it first), or past the time limit plus 5s; it exits without locking when the holder left `exit.json` (a clean end).
@@ -25,7 +26,8 @@ bench/live.mjs    # live, on a loft with the lock stubbed; --real locks once whi
 - Never set `canBecomeVisibleWithoutLogin`: at the lock screen the cover must be gone, so the user can always type their password.
 - The cover stays below alpha 1: an opaque one makes pages under it hidden and perch's trusted clicks refuse.
 - Until the Mac locks, a failure locks; after a lock, or a lock that can't be made, veil leaves nothing on screen.
-- Never take the user's foreground or move the cursor: the cover is non-activating and the holder is an accessory app.
+- veil may take the foreground: it runs only when the user chose to leave the Mac unlocked, and holding the keyboard keeps the first key off their apps. A dry run (a bench while they may be here) never does, unless `VEIL_TAKE_KEYS=1`. It never moves the cursor.
+- When a lock doesn't take, the cover drops rather than staying up: a user must never be left behind a black screen with no lock screen to type into. Fail closed covers everything before that point.
 - Single-file CLI plus the JXA file, Node built-ins only, no build step.
 
 ## Test

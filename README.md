@@ -24,7 +24,7 @@ An agent you tell "I'm leaving" can run `veil up --owner <its pid>` itself.
 - It never stays on your screen after the Mac locks, or when a lock doesn't take.
 
 ## Known gaps
-- The first key pressed reaches the app in front before the lock lands. A click or mouse move only hits the cover.
+- veil comes to the front while it's up, so a key, click or mouse move only reaches the cover.
 - If the agent brings a window to the front or moves the real pointer, that counts as a touch and locks the Mac. perch's background clicks and presses don't.
 
 ## Works with

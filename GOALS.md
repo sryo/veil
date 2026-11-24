@@ -23,7 +23,7 @@ When two goals conflict, the higher one wins.
 |---|---|---|---|
 | 1 | veil windows left after a lock and after a failed one, re-raises after the lock, stalled holders the warden kills, warden locks after a clean exit (fake world) | `bench/run.mjs` | `node bench/run.mjs` |
 | 2 | triggers that lock, out of every kind; ticks from trigger to lock request (fake world) | `bench/run.mjs` | `node bench/run.mjs` |
-| 1 | on a loft with the lock stubbed: windows left after a lock, a failed lock, a stalled and a killed holder; seconds until a failed lock drops the cover; with the user away (`--real`), veil windows left on the real lock screen | `bench/live.mjs` | live: `node bench/live.mjs` |
+| 1 | on a loft with the lock stubbed: windows left after a lock, a failed lock, a stalled and a killed holder; seconds until a failed lock drops the cover; with the user away (`--real`), veil windows left on the real lock screen, the Mac locked, keys going to the real veil | `bench/live.mjs` | live: `node bench/live.mjs` |
 | 2 | on a loft: seconds until the warden locks for a stalled and a killed holder | `bench/live.mjs` | live: `node bench/live.mjs` |
 | 3 | on a loft under the veil: page visible, frames per second, trusted clicks and presses that hit, idle-counter resets from the agent's input, foreground app changes | `bench/live.mjs` | live: `node bench/live.mjs` |
 | 4 | holder memory, CPU seconds per minute, `veil up` time | `bench/live.mjs` | live: `node bench/live.mjs` |
@@ -32,6 +32,6 @@ Caps: `all=ask quality=hard time=ask+10%`
 
 ## Non-goals
 - Unlocking, or any way back in other than your password or Touch ID.
-- Swallowing the first keystroke. It reaches the app in front before the lock lands; blocking it needs Accessibility or Input Monitoring and an input filter, a later change.
+- Filtering input. veil holds the keyboard by being the app in front, which the user chose by leaving; it installs no input filter (that needs Accessibility or Input Monitoring).
 - Covering lofts. Nobody sees them.
 - Watching a locked Mac. Once it's locked, macOS guards it and veil is gone.
