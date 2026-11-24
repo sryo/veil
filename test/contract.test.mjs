@@ -26,7 +26,7 @@ test("R10 veil.js compiles and its self-test reads the Mac without changing it",
   const out = JSON.parse(execFileSync("osascript", ["-l", "JavaScript", new URL("../veil.js", import.meta.url).pathname, "selftest"], { encoding: "utf8", timeout: 20000 }));
   assert.equal(out.ok, true);
   assert.equal(out.lockBinds, true);
-  assert.ok(out.displays.length >= 1);
+  assert.ok(out.displays.length >= 1 || out.asleep, "no display while the main one is awake");
   assert.equal(typeof out.idle, "number");
   assert.equal(typeof out.locked, "boolean");
 });

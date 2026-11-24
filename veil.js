@@ -106,7 +106,8 @@ function run(argv) {
   ObjC.bindFunction("IORegistryEntryCreateCFProperty", ["id", ["unsigned int", "id", "void *", "unsigned int"]]);
   const env = ObjC.deepUnwrap($.NSProcessInfo.processInfo.environment);
   const mode = argv[0];
-  if (mode === "selftest") return JSON.stringify({ ok: true, lockBinds: bindLock(), displays: displays(), idle: idle(), locked: sessionLocked() });
+  // An asleep main display (a locked, idle Mac) lists no active displays.
+  if (mode === "selftest") return JSON.stringify({ ok: true, lockBinds: bindLock(), displays: displays(), asleep: Number($.CGDisplayIsAsleep($.CGMainDisplayID())) === 1, idle: idle(), locked: sessionLocked() });
   const home = argv[1];
   const dry = env.VEIL_DRY || "";
   // A dry run may cover only the displays it names (a loft, so nobody sees it),
