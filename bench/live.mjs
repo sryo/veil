@@ -18,7 +18,7 @@ const PERCH = process.env.PERCH_DIR || join(process.env.HOME, "Documents", "perc
 const { connect, text } = await import(join(PERCH, "scripts", "mcp-client.mjs"));
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const osa = (src) => execFileSync("osascript", ["-l", "JavaScript", "-e", src], { encoding: "utf8" }).trim();
-const probe = () => JSON.parse(osa(`ObjC.import("AppKit"); ObjC.import("CoreGraphics"); const p=$.CGEventGetLocation($.CGEventCreate(null)); JSON.stringify({ front: ObjC.unwrap($.NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier), cursor: [Math.round(p.x), Math.round(p.y)], idle: Number($.CGEventSourceSecondsSinceLastEventType(1, 4294967295)) })`));
+const probe = () => JSON.parse(osa(`ObjC.import("AppKit"); ObjC.import("CoreGraphics"); const p=$.CGEventGetLocation($.CGEventCreate(null)); JSON.stringify({ front: ObjC.unwrap($.NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier), cursor: [Math.round(p.x), Math.round(p.y)], idle: Math.min(...[1, 3, 25, 5, 6, 7, 27, 10, 12, 22, 23, 24].map((t) => Number($.CGEventSourceSecondsSinceLastEventType(1, t)))) })`));
 const windowsOf = (pid) => Number(osa(`ObjC.import("CoreGraphics"); (ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(0, 0))) || []).filter((w) => w.kCGWindowOwnerPID === ${pid}).length`));
 const lofts = () => JSON.parse(execFileSync("loft", ["list", "--json"], { encoding: "utf8" }));
 function veil(home, env, ...args) {
@@ -57,13 +57,14 @@ try {
   put("frames per second under the veil", "higher", "quality", p2 - p1.F, true);
   let clicks = 0, presses = 0, resets = 0;
   for (let k = 0; k < 5; k++) {
-    const a = probe();
-    if ((J(await c.call("click", { target, selector: "#b", trusted: true })).hit) === true) clicks++;
-    if ((J(await c.call("press", { target, selector: "#i", key: "a", trusted: true })).hit) === true) presses++;
-    const b = probe();
-    // The idle counter went down by more than the user could explain: count it only
-    // when the user was idle across the whole step.
-    if (a.idle > 3 && b.idle < a.idle) resets++;
+    // A drop in the idle counter across one call, while the user was idle
+    // (over 3s) and the cursor didn't move, is the agent's input.
+    for (const [kind, args] of [["click", { target, selector: "#b", trusted: true }], ["press", { target, selector: "#i", key: "a", trusted: true }]]) {
+      const a = probe(), r = J(await c.call(kind, args)), b = probe();
+      if (r.hit === true) kind === "click" ? clicks++ : presses++;
+      if (process.env.VEIL_BENCH_TRACE) console.error(JSON.stringify({ a, b, delivery: r.delivery, aim: r.aim }));
+      if (a.idle > 3 && b.idle < a.idle && a.cursor.join() === b.cursor.join()) resets++;
+    }
   }
   const log = await ev("log.splice(0)");
   put("trusted clicks that hit under the veil, of 5", "higher", "quality", Math.min(clicks, log.filter((x) => x === "ctrue").length));

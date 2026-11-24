@@ -223,10 +223,14 @@ function spin(seconds) {
     $.NSApp.sendEvent(e);
   }
 }
-// Seconds since the last keyboard, mouse or trackpad event from hardware
-// (HID system state, any event type). Background input posted to a process
-// doesn't reset it.
-function idle() { return Number($.CGEventSourceSecondsSinceLastEventType(1, 4294967295)); }
+// Seconds since the last real key, click, move or scroll from hardware (HID
+// system state). Not the any-event counter: it also counts null events, which
+// another process's first posted event and power assertions produce, so
+// perch's background input would trip it. Event types: left, right and other
+// mouse down (1, 3, 25), moved and dragged (5, 6, 7, 27), key down (10),
+// modifier (12), scroll (22), tablet (23, 24).
+const INPUT_TYPES = [1, 3, 25, 5, 6, 7, 27, 10, 12, 22, 23, 24];
+function idle() { return Math.min.apply(null, INPUT_TYPES.map((t) => Number($.CGEventSourceSecondsSinceLastEventType(1, t)))); }
 // Every active display; a loft is vendor 0x6c66, product 0x7466. The ids
 // come back through a byte buffer, read as base64 (a Ref holds only one).
 function displays() {

@@ -30,3 +30,11 @@ test("R10 veil.js compiles and its self-test reads the Mac without changing it",
   assert.equal(typeof out.idle, "number");
   assert.equal(typeof out.locked, "boolean");
 });
+
+test("R11 input means a real key, click, move or scroll, not the any-event counter", () => {
+  // macOS also counts null events (another process's first posted event, power
+  // assertions) in the any-event counter; perch's background posts land there.
+  const body = SOURCE.slice(SOURCE.indexOf("const INPUT_TYPES"), SOURCE.indexOf("function displays()"));
+  assert.doesNotMatch(body, /4294967295/);
+  for (const t of [1, 3, 5, 6, 7, 10, 12, 22, 25, 27]) assert.match(body, new RegExp(`\\b${t}\\b`), `event type ${t}`);
+});
