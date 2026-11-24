@@ -191,9 +191,10 @@ function run(argv) {
   for (;;) {
     spin(K.TICK);
     // Input every tick, since it's the cheapest read and the first touch matters
-    // most; the rest every third tick, and the cover every fifth.
+    // most; the rest every third tick (every tick while a lock is pending), and
+    // the cover every fifth.
     if (n % 5 === 0) ok = coverOk();
-    if (n++ % 3 === 0 || !r) {
+    if (n++ % 3 === 0 || !r || s.phase === "locking") {
       write(path("beat"), String(now()));
       const wj = read(path("warden.json"));
       r = { displays: screens(), covered: Object.keys(wins).map(Number), ownerAlive: !owner || alive(owner),
